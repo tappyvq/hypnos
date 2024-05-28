@@ -1,0 +1,236 @@
+import pygame
+import random
+import time
+
+# Initialize Pygame
+pygame.init()
+
+# Screen dimensions
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+
+# Player settings
+PLAYER_WIDTH = 50
+PLAYER_HEIGHT = 50
+PLAYER_JUMP_STRENGTH = 15
+PLAYER_GRAVITY = 1
+PLAYER_SPEED = 5
+
+# Enemy settings
+ENEMY_WIDTH = 50
+ENEMY_HEIGHT = 50
+ENEMY_SPEED = 3
+
+# Collectible settings
+COLLECTIBLE_WIDTH = 30
+COLLECTIBLE_HEIGHT = 30
+COLLECTIBLE_TIERS = {
+    'common': {'points': 5},
+    'rare': {'points': 10},
+    'legendary': {'points': 20, 'boost': True}
+}
+BOOST_DURATION = 30  # seconds
+BOOST_MULTIPLIER = 2
+
+# Initialize screen
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("2D Platformer")
+
+# Clock for controlling frame rate
+clock = pygame.time.Clock()
+
+# Load images
+player_image = pygame.image.load('player.png')
+player_image = pygame.transform.scale(player_image, (PLAYER_WIDTH, PLAYER_HEIGHT))
+
+enemy_image = pygame.image.load('enemy.png')
+enemy_image = pygame.transform.scale(enemy_image, (ENEMY_WIDTH, ENEMY_HEIGHT))
+
+common_collectible_image = pygame.image.load('common_collectible.png')
+common_collectible_image = pygame.transform.scale(common_collectible_image, (COLLECTIBLE_WIDTH, COLLECTIBLE_HEIGHT))
+
+rare_collectible_image = pygame.image.load('rare_collectible.png')
+rare_collectible_image = pygame.transform.scale(rare_collectible_image, (COLLECTIBLE_WIDTH, COLLECTIBLE_HEIGHT))
+
+legendary_collectible_image = pygame.image.load('legendary_collectible.png')
+legendary_collectible_image = pygame.transform.scale(legendary_collectible_image, (COLLECTIBLE_WIDTH, COLLECTIBLE_HEIGHT))
+
+# Player class
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = player_image
+        self.rect = self.image.get_rect()
+        self.rect.x = SCREEN_WIDTH // 2
+        self.rect.y = SCREEN_HEIGHT - PLAYER_HEIGHT
+        self.change_x = 0
+        self.change_y = 0
+        self.on_ground = False
+        self.speed = PLAYER_SPEED
+        self.jump_strength = PLAYER_JUMP_STRENGTH
+        self.boost_end_time = 0
+
+    def update(self):
+        self.gravity()
+        self.rect.x += self.change_x
+        self.rect.y += self.change_y
+
+        # Check for collision with ground
+        if self.rect.y >= SCREEN_HEIGHT - PLAYER_HEIGHT:
+            self.rect.y = SCREEN_HEIGHT - PLAYER_HEIGHT
+            self.change_y = 0
+            self.on_ground = True
+
+        # Handle boost expiration
+        if time.time() > self.boost_end_time:
+            self.speed = PLAYER_SPEED
+            self.jump_strength = PLAYER_JUMP_STRENGTH
+
+    def gravity(self):
+        if not self.on_ground:
+            self.change_y += PLAYER_GRAVITY
+
+    def jump(self):
+        if self.on_ground:
+            self.change_y = -self.jump_strength
+            self.on_ground = False
+
+    def go_left(self):
+        self.change_x = -self.speed
+
+    def go_right(self):
+        self.change_x = self.speed
+
+    def stop(self):
+        self.change_x = 0
+
+    def boost(self):
+        self.speed *= BOOST_MULTIPLIER
+        self.jump_strength *= BOOST_MULTIPLIER
+        self.boost_end_time = time.time() + BOOST_DURATION
+
+# Enemy class
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = enemy_image
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.change_x = ENEMY_SPEED
+
+    def update(self):
+        self.rect.x += self.change_x
+        if self.rect.right > SCREEN_WIDTH or self.rect.left < 0:
+            self.change_x *= -1
+
+# Collectible class
+class Collectible(pygame.sprite.Sprite):
+    def __init__(self, x, y, tier):
+        super().__init__()
+        if tier == 'common':
+            self.image = common_collectible_image
+        elif tier == 'rare':
+            self.image = rare_collectible_image
+        elif tier == 'legendary':
+            self.image = legendary_collectible_image
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.tier = tier
+
+# Initialize player, enemy, and collectible groups
+all_sprites = pygame.sprite.Group()
+enemy_sprites = pygame.sprite.Group()
+collectible_sprites = pygame.sprite.Group()
+
+player = Player()
+all_sprites.add(player)
+
+# Create some enemies
+for i in range(5):
+    enemy = Enemy(random.randint(0, SCREEN_WIDTH - ENEMY_WIDTH), random.randint(0, SCREEN_HEIGHT - ENEMY_HEIGHT))
+    all_sprites.add(enemy)
+    enemy_sprites.add(enemy)
+
+# Create some collectibles
+for i in range(10):
+    tier = random.choice(list(COLLECTIBLE_TIERS.keys()))
+    collectible = Collectible(random.randint(0, SCREEN_WIDTH - COLLECTIBLE_WIDTH), random.randint(0, SCREEN_HEIGHT - COLLECTIBLE_HEIGHT), tier)
+    all_sprites.add(collectible)
+    collectible_sprites.add(collectible)
+
+# Game loop
+running = True
+score = 0
+font = pygame.font.SysFont(None, 36)
+shake_timer = 0
+
+def screen_shake():
+    global shake_timer
+    if shake_timer > 0:
+        shake_timer -= 1
+        shake_intensity = 5
+        screen.blit(pygame.transform.rotate(screen, random.uniform(-shake_intensity, shake_intensity)), (0, 0))
+
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_a:
+                player.go_left()
+            if event.key == pygame.K_d:
+                player.go_right()
+            if event.key == pygame.K_w or event.key == pygame.K_SPACE:
+                player.jump()
+            if event.key == pygame.K_ESCAPE:
+                running = False
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_a and player.change_x < 0:
+                player.stop()
+            if event.key == pygame.K_d and player.change_x > 0:
+                player.stop()
+
+    # Update all sprites
+    all_sprites.update()
+
+    # Check for collisions between player and enemies
+    enemy_hits = pygame.sprite.spritecollide(player, enemy_sprites, True)
+    if enemy_hits:
+        score += 10
+
+    # Check for collisions between player and collectibles
+    collectible_hits = pygame.sprite.spritecollide(player, collectible_sprites, True)
+    for collectible in collectible_hits:
+        score += COLLECTIBLE_TIERS[collectible.tier]['points']
+        if 'boost' in COLLECTIBLE_TIERS[collectible.tier]:
+            player.boost()
+            shake_timer = 30  # Screen shake for half a second
+
+    # Calculate score based on height
+    height_score = SCREEN_HEIGHT - player.rect.y
+    total_score = score + height_score
+
+    # Draw everything
+    screen.fill(WHITE)
+    all_sprites.draw(screen)
+
+    # Draw the score
+    score_text = font.render(f"Score: {total_score}", True, BLACK)
+    screen.blit(score_text, (10, 10))
+
+    # Screen shake effect
+    screen_shake()
+
+    # Flip the display
+    pygame.display.flip()
+
+    # Cap the frame rate
+    clock.tick(60)
+
+pygame.quit()
